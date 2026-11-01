@@ -1,4 +1,4 @@
-# Verification record · Hackathon Edition 2.0.0
+# Verification record · Hackathon Edition 2.0.1
 
 Verified 1 November 2026 using Python 3.11 on macOS. This is an integration record, not a hosted deployment receipt.
 
@@ -6,7 +6,7 @@ Verified 1 November 2026 using Python 3.11 on macOS. This is an integration reco
 
 - **Real end-to-end AI + PayPal sandbox checkout:** the user generated a Nebius plan, reviewed the cart, approved checkout as the sandbox buyer and completed capture. The stored receipt reports **$215.00 USD, COMPLETED**. A separate read-only PayPal Orders v2 request independently verified the order ID, cart reference, USD amount and completed capture ID against the stored receipt. No duplicate capture was attempted.
 - **Recorded AI identity:** Nebius Token Factory / `nvidia/Nemotron-3_5-Lightning`. The original plan's provider/model and budget are retained on the order receipt.
-- **38 automated backend/tooling tests:** `python -m unittest discover -s tests -v` passed. Controlled providers and isolated databases cover authoritative prices/budgets, session ownership, CSRF, quotas, malformed data, retries, pending captures, protected payment transitions, immutable AI provenance and tooling guards. Automated tests do not call real providers.
+- **41 automated backend/tooling tests:** `python -m unittest discover -s tests -v` passed. Controlled providers and isolated databases cover authoritative prices/budgets, session ownership, CSRF, quotas, malformed data, retries, pending captures, protected payment transitions, immutable AI provenance and tooling guards. Automated tests do not call real providers.
 - **Actual Postman Newman 6.2.2 execution:** 7 rehearsal requests, 18 assertions, zero failures. The collection checks session/cookies/CSRF, catalog, plan/revision totals, simulated receipt and history. Its manual sandbox operations require separate one-shot opt-ins.
 - **Python rehearsal smoke checker:** a $226.00 cart within $300.00 completed with a SIMULATED receipt. The checker refuses sandbox mutations and requires explicit opt-in for provider spending.
 - **Real AI checks:** separate provider and browser-to-provider requests produced valid five-product $215.00 and $220.00 plans within $300.00. Updated provider credentials were subsequently checked against the model catalog and a real $215.00 planning result.
@@ -24,3 +24,5 @@ Hosting configuration additionally verifies automatic Render origin selection, e
 3. Publish the public repository with its root MIT LICENSE, record/upload a publicly visible YouTube demo under three minutes, and submit the Devpost entry. Keep judge access available through 15 December 2026, 9:30 pm IST. Personal eligibility and ownership remain the entrant's responsibility.
 
 Local/rehearsal mode is still available for practice; use provider+sandbox for the final demonstration. Real-money payments and product fulfillment are outside this project.
+
+Provider diagnostics now distinguish authentication, permission, billing/quota, invalid model/request, network and upstream availability errors without returning provider bodies or credentials. Hosted AI planning reproduced a generic failure; the deployment must be retested after the diagnostic update to identify its upstream status.

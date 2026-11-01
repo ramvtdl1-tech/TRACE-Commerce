@@ -51,7 +51,7 @@ The earlier TRACE project was a general chatbot with session memory. This separa
 
 ## Validation and limits
 
-`python -m unittest discover -s tests -v`: **38 tests passed**. Postman’s Newman runner also passed **7 requests and 18 assertions**. Automated tests use controlled responses. The real Nebius request on 1 November 2026 produced five valid catalog items totaling **$215.00 within a $300.00 budget**; the browser integration also produced a valid five-product **$220.00** setup. Both results passed server catalog and budget validation. The combined browser journey completed a **$215.00 USD PayPal sandbox capture on 1 November 2026**. A separate read-only PayPal API request independently verified the completed capture, cart reference, currency and amount. See `docs/VERIFICATION.md` for scope and limitations.
+`python -m unittest discover -s tests -v`: **41 tests passed**. Postman’s Newman runner also passed **7 requests and 18 assertions**. Automated tests use controlled responses. The real Nebius request on 1 November 2026 produced five valid catalog items totaling **$215.00 within a $300.00 budget**; the browser integration also produced a valid five-product **$220.00** setup. Both results passed server catalog and budget validation. The combined browser journey completed a **$215.00 USD PayPal sandbox capture on 1 November 2026**. A separate read-only PayPal API request independently verified the completed capture, cart reference, currency and amount. See `docs/VERIFICATION.md` for scope and limitations.
 
 This is a single-instance sandbox prototype. It does not provide production commerce fulfillment, live payments or evidence of real-world savings. No external deployment or successful PayPal transaction is implied by this draft.
 

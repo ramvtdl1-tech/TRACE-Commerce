@@ -19,7 +19,7 @@ from .providers import AIClient, PayPalClient, ProviderError
 from .settings import ROOT, Settings
 from .store import Store, now_iso
 
-PROJECT_VERSION = "2.0.0"
+PROJECT_VERSION = "2.0.1"
 
 
 class PlanRequest(BaseModel):

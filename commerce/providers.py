@@ -17,7 +17,8 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def request_json(url, method="GET", payload=None, headers=None, timeout=30):
+def request_json(url, method="GET", payload=None, headers=None, timeout=30, provider="provider"):
+    label = {"ai": "AI provider", "paypal": "PayPal sandbox"}.get(provider, "Provider")
     encoded = None if payload is None else json.dumps(payload).encode("utf-8")
     request_headers = {"Accept": "application/json", **(headers or {})}
     if encoded is not None:
@@ -32,8 +33,34 @@ def request_json(url, method="GET", payload=None, headers=None, timeout=30):
             if not isinstance(result, dict):
                 raise ValueError("Unexpected response")
             return result
-    except (HTTPError, URLError, TimeoutError, OSError, ValueError) as error:
-        raise ProviderError("The provider could not complete this request. Check the server configuration or retry shortly.") from None
+    except HTTPError as error:
+        # Never return upstream bodies, headers, request URLs or credentials.
+        code = error.code
+        if code == 401:
+            setting = "AI_API_KEY" if provider == "ai" else "server credentials"
+            message = f"{label} authentication failed (HTTP 401). Check {setting} in the server environment."
+        elif code == 403:
+            message = f"{label} access denied (HTTP 403). Check provider permissions, model access and regional restrictions."
+        elif code == 402:
+            message = f"{label} rejected the request (HTTP 402). Check provider credits and billing."
+        elif code == 404:
+            message = f"{label} endpoint or model was not found (HTTP 404). Check the server API base URL and model ID."
+        elif code == 429:
+            message = f"{label} rate or quota limit reached (HTTP 429). Check provider limits and retry later."
+        elif code in {400, 422}:
+            message = f"{label} rejected the request configuration (HTTP {code}). Check model and parameter support."
+        elif 500 <= code <= 599:
+            message = f"{label} is temporarily unavailable (HTTP {code}). Please retry shortly."
+        else:
+            message = f"{label} returned an unexpected HTTP status ({code}). Check the server API endpoint."
+        error.close()
+        raise ProviderError(message) from None
+    except TimeoutError:
+        raise ProviderError(f"{label} request timed out. Please retry shortly.") from None
+    except (URLError, OSError):
+        raise ProviderError(f"{label} connection failed. Check the server API base URL and network access.") from None
+    except ValueError:
+        raise ProviderError(f"{label} returned an invalid JSON response. Please retry shortly.") from None
 
 
 class AIClient:
@@ -57,7 +84,7 @@ class AIClient:
              "messages": [{"role": "system", "content": system},
                           {"role": "user", "content": json.dumps({"preferences": prompt, "budget_cents": budget_cents, "catalog": catalog})}],
              "response_format": {"type": "json_object"}, "temperature": 0.2, "max_tokens": self.settings.ai_max_tokens},
-            {"Authorization": "Bearer " + self.settings.ai_api_key}, timeout=45,
+            {"Authorization": "Bearer " + self.settings.ai_api_key}, timeout=45, provider="ai",
         )
         try:
             choice = data["choices"][0]
@@ -112,7 +139,7 @@ class PayPalClient:
         headers = {"Authorization": "Bearer " + self.token(), "Prefer": "return=representation"}
         if request_id:
             headers["PayPal-Request-Id"] = request_id
-        return request_json(self.BASE + path, method, payload, headers)
+        return request_json(self.BASE + path, method, payload, headers, provider="paypal")
 
     def create(self, order):
         amount = format(Decimal(order["total_cents"]) / 100, ".2f")

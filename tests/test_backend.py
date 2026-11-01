@@ -340,7 +340,7 @@ class CommerceTests(unittest.TestCase):
         self.settings.paypal_client_secret = "private-paypal-credential"
         code, config = self.browser.request("GET", "/api/config")
         self.assertEqual(code, 200)
-        self.assertEqual(config["project_version"], "2.0.0")
+        self.assertEqual(config["project_version"], "2.0.1")
         self.assertEqual(config["ai_provider"], "Nebius Token Factory")
         self.assertEqual(config["ai_model"], "catalog-model-v1")
         self.assertTrue(config["integration_modes_enabled"])
