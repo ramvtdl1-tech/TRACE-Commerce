@@ -1,0 +1,15 @@
+services:
+  commerce:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file: .env
+    environment:
+      DATABASE_PATH: /app/data/commerce.sqlite3
+    volumes:
+      - commerce-data:/app/data
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  commerce-data:

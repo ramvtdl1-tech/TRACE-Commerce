@@ -1,0 +1,1062 @@
+{
+  "info": {
+    "_postman_id": "1e753f32-4b04-4659-9ca7-d7cd300ef5be",
+    "name": "TRACE Commerce \u2014 PayPal + AI judge checks",
+    "description": "App-server API collection. No PayPal merchant secret or AI API key belongs here. The default automated flow is local rehearsal only. A separate manual sandbox folder has one-shot opt-in guards. See postman/README.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "(() => {",
+          "const base = pm.environment.get('base_url') || '';",
+          "if (!(/^https:\\/\\/[^\\/?#@]+\\/?$/.test(base) || /^http:\\/\\/(localhost|127\\.0\\.0\\.1|\\[::1\\])(:[0-9]+)?\\/?$/.test(base))) { console.warn('Skipped: base_url must be an HTTPS origin or HTTP localhost origin without credentials/path.'); pm.execution.skipRequest(); }",
+          "})();"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "csrf_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "payment_mode",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ai_mode",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "catalog_prices",
+      "value": "{}",
+      "type": "string"
+    },
+    {
+      "key": "plan_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cart_items",
+      "value": "[]",
+      "type": "string"
+    },
+    {
+      "key": "plan_total",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "order_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "order_mode",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "approval_url",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "manual_action",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "buyer_approved_order_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Read-only discovery",
+      "description": "Safe default discovery. No model request, PayPal order or capture. Keep the cookie jar enabled.",
+      "item": [
+        {
+          "name": "Read configuration and establish session",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/config",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "config"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('Configuration responds successfully', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test('Modes are explicit', () => { pm.expect(data.mode).to.be.oneOf(['rehearsal','sandbox']); pm.expect(data.ai_mode).to.be.oneOf(['local','provider']); });",
+                  "pm.test('Merchant and model secrets are not returned', () => { ['paypal_client_secret','paypal_client_id','ai_api_key','access_token'].forEach(key => pm.expect(data).not.to.have.property(key)); });",
+                  "pm.collectionVariables.set('csrf_token', data.csrf_token || '');",
+                  "pm.collectionVariables.set('payment_mode', data.mode || '');",
+                  "pm.collectionVariables.set('ai_mode', data.ai_mode || '');",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Read authoritative catalog",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/catalog",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "catalog"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('Catalog responds successfully', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test('Catalog is USD with integer-cent prices', () => { pm.expect(data.currency).to.eql('USD'); pm.expect(data.items).to.be.an('array').that.is.not.empty; data.items.forEach(item => { pm.expect(Number.isInteger(item.price_cents)).to.eql(true); pm.expect(item.price_cents).to.be.above(0); }); });",
+                  "const prices = {}; (data.items || []).forEach(item => { prices[item.id] = item.price_cents; });",
+                  "pm.collectionVariables.set('catalog_prices', JSON.stringify(prices));",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Read session payment history",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('History responds successfully', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test('History is a session-owned list', () => { pm.expect(data.orders).to.be.an('array'); data.orders.forEach(order => { pm.expect(order.mode).to.be.oneOf(['sandbox','rehearsal']); pm.expect(order.currency).to.eql('USD'); if (order.status === 'SIMULATED') pm.expect(order.mode).to.eql('rehearsal'); }); });",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rehearsal smoke",
+      "description": "Run this folder, not the manual sandbox folder. Refuses any AI-provider or sandbox payment mode before mutations. All receipts must be SIMULATED.",
+      "item": [
+        {
+          "name": "Rehearsal: establish session and verify modes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/config",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "config"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('Configuration responds successfully', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test('Modes are explicit', () => { pm.expect(data.mode).to.be.oneOf(['rehearsal','sandbox']); pm.expect(data.ai_mode).to.be.oneOf(['local','provider']); });",
+                  "pm.test('Merchant and model secrets are not returned', () => { ['paypal_client_secret','paypal_client_id','ai_api_key','access_token'].forEach(key => pm.expect(data).not.to.have.property(key)); });",
+                  "pm.collectionVariables.set('csrf_token', data.csrf_token || '');",
+                  "pm.collectionVariables.set('payment_mode', data.mode || '');",
+                  "pm.collectionVariables.set('ai_mode', data.ai_mode || '');",
+                  "",
+                  "if (data.mode !== 'rehearsal' || data.ai_mode !== 'local') { pm.test('Automated rehearsal requires local + rehearsal modes', () => pm.expect(false).to.eql(true)); pm.execution.setNextRequest(null); }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Rehearsal: read catalog",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/catalog",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "catalog"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('Catalog responds successfully', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test('Catalog is USD with integer-cent prices', () => { pm.expect(data.currency).to.eql('USD'); pm.expect(data.items).to.be.an('array').that.is.not.empty; data.items.forEach(item => { pm.expect(Number.isInteger(item.price_cents)).to.eql(true); pm.expect(item.price_cents).to.be.above(0); }); });",
+                  "const prices = {}; (data.items || []).forEach(item => { prices[item.id] = item.price_cents; });",
+                  "pm.collectionVariables.set('catalog_prices', JSON.stringify(prices));",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Rehearsal: generate local plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Origin",
+                "value": "{{base_url}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/plans",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "plans"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"Build a calm home office for video calls under $300\",\n  \"budget_cents\": 30000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "if (pm.collectionVariables.get('payment_mode') !== 'rehearsal' || pm.collectionVariables.get('ai_mode') !== 'local' || !pm.collectionVariables.get('csrf_token')) { console.warn('Skipped: this automated folder requires local planner + rehearsal payments. Run its config request first.'); pm.execution.skipRequest(); }",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('Plan responds successfully', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json();",
+                  "const prices = JSON.parse(pm.collectionVariables.get('catalog_prices') || '{}');",
+                  "pm.test('Plan prices and totals come from the catalog and respect $300', () => {",
+                  "  pm.expect(plan.items).to.be.an('array').that.is.not.empty;",
+                  "  pm.expect(plan.budget_cents).to.eql(30000);",
+                  "  let total = 0; const seen = new Set();",
+                  "  plan.items.forEach(item => { pm.expect(seen.has(item.product_id)).to.eql(false); seen.add(item.product_id); pm.expect(item.unit_price_cents).to.eql(prices[item.product_id]); pm.expect(Number.isInteger(item.quantity)).to.eql(true); pm.expect(item.quantity).to.be.within(1,5); pm.expect(item.line_total_cents).to.eql(prices[item.product_id] * item.quantity); total += item.line_total_cents; });",
+                  "  pm.expect(plan.total_cents).to.eql(total); pm.expect(total).to.be.at.most(30000); pm.expect(plan.remaining_cents).to.eql(30000-total);",
+                  "});",
+                  "pm.test('Planner source is correctly labeled', () => pm.expect(plan.ai_source).to.eql(pm.collectionVariables.get('ai_mode') === 'provider' ? 'provider' : 'local'));",
+                  "if (pm.response.code === 200 && plan.id) { pm.collectionVariables.set('plan_id', plan.id); pm.collectionVariables.set('cart_items', JSON.stringify(plan.items.map(item => ({product_id:item.product_id,quantity:item.quantity})))); pm.collectionVariables.set('plan_total', String(plan.total_cents)); }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Rehearsal: revise authoritative cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Origin",
+                "value": "{{base_url}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/plans/{{plan_id}}/revise",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "plans",
+                "{{plan_id}}",
+                "revise"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"items\": {{cart_items}}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "if (pm.collectionVariables.get('payment_mode') !== 'rehearsal' || pm.collectionVariables.get('ai_mode') !== 'local' || !pm.collectionVariables.get('csrf_token')) { console.warn('Skipped: this automated folder requires local planner + rehearsal payments. Run its config request first.'); pm.execution.skipRequest(); }",
+                  "",
+                  "if (!pm.collectionVariables.get('plan_id')) { console.warn('Skipped: generate a valid plan first.'); pm.execution.skipRequest(); }",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('Plan responds successfully', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json();",
+                  "const prices = JSON.parse(pm.collectionVariables.get('catalog_prices') || '{}');",
+                  "pm.test('Plan prices and totals come from the catalog and respect $300', () => {",
+                  "  pm.expect(plan.items).to.be.an('array').that.is.not.empty;",
+                  "  pm.expect(plan.budget_cents).to.eql(30000);",
+                  "  let total = 0; const seen = new Set();",
+                  "  plan.items.forEach(item => { pm.expect(seen.has(item.product_id)).to.eql(false); seen.add(item.product_id); pm.expect(item.unit_price_cents).to.eql(prices[item.product_id]); pm.expect(Number.isInteger(item.quantity)).to.eql(true); pm.expect(item.quantity).to.be.within(1,5); pm.expect(item.line_total_cents).to.eql(prices[item.product_id] * item.quantity); total += item.line_total_cents; });",
+                  "  pm.expect(plan.total_cents).to.eql(total); pm.expect(total).to.be.at.most(30000); pm.expect(plan.remaining_cents).to.eql(30000-total);",
+                  "});",
+                  "pm.test('Planner source is correctly labeled', () => pm.expect(plan.ai_source).to.eql(pm.collectionVariables.get('ai_mode') === 'provider' ? 'provider' : 'local'));",
+                  "if (pm.response.code === 200 && plan.id) { pm.collectionVariables.set('plan_id', plan.id); pm.collectionVariables.set('cart_items', JSON.stringify(plan.items.map(item => ({product_id:item.product_id,quantity:item.quantity})))); pm.collectionVariables.set('plan_total', String(plan.total_cents)); }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Rehearsal: create simulated order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Origin",
+                "value": "{{base_url}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"plan_id\": \"{{plan_id}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "if (pm.collectionVariables.get('payment_mode') !== 'rehearsal' || pm.collectionVariables.get('ai_mode') !== 'local' || !pm.collectionVariables.get('csrf_token')) { console.warn('Skipped: this automated folder requires local planner + rehearsal payments. Run its config request first.'); pm.execution.skipRequest(); }",
+                  "",
+                  "if (!pm.collectionVariables.get('plan_id')) { console.warn('Skipped: generate a valid plan first.'); pm.execution.skipRequest(); }",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('Order responds successfully', () => pm.response.to.have.status(200));",
+                  "const order = pm.response.json();",
+                  "pm.test('Order is rehearsal, with the reviewed total', () => { pm.expect(order.mode).to.eql('rehearsal'); pm.expect(order.status).to.eql('CREATED'); pm.expect(order.total_cents).to.eql(Number(pm.collectionVariables.get('plan_total'))); pm.expect(order.provider_order_id).to.match(/^REHEARSAL-/); });",
+                  "if (pm.response.code === 200 && order.mode === 'rehearsal') { pm.collectionVariables.set('order_id', order.id); pm.collectionVariables.set('order_mode', order.mode); }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Rehearsal: simulate explicit approval",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Origin",
+                "value": "{{base_url}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/orders/{{order_id}}/capture",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                "{{order_id}}",
+                "capture"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "if (pm.collectionVariables.get('payment_mode') !== 'rehearsal' || pm.collectionVariables.get('ai_mode') !== 'local' || !pm.collectionVariables.get('csrf_token')) { console.warn('Skipped: this automated folder requires local planner + rehearsal payments. Run its config request first.'); pm.execution.skipRequest(); }",
+                  "",
+                  "if (!pm.collectionVariables.get('order_id') || pm.collectionVariables.get('order_mode') !== 'rehearsal') { console.warn('Skipped: capture requires a rehearsal order from this session.'); pm.execution.skipRequest(); }",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('Simulation responds successfully', () => pm.response.to.have.status(200));",
+                  "const receipt = pm.response.json();",
+                  "pm.test('Receipt is explicitly simulated, never a PayPal payment', () => { pm.expect(receipt.status).to.eql('SIMULATED'); pm.expect(receipt.mode).to.eql('rehearsal'); pm.expect(receipt.capture_id).to.match(/^SIM-/); pm.expect(receipt.total_cents).to.eql(Number(pm.collectionVariables.get('plan_total'))); });",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Rehearsal: verify session history",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('History responds successfully', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test('History is a session-owned list', () => { pm.expect(data.orders).to.be.an('array'); data.orders.forEach(order => { pm.expect(order.mode).to.be.oneOf(['sandbox','rehearsal']); pm.expect(order.currency).to.eql('USD'); if (order.status === 'SIMULATED') pm.expect(order.mode).to.eql('rehearsal'); }); });",
+                  "",
+                  "pm.test('Simulated receipt persists in this session', () => pm.expect(data.orders.some(order => order.id === pm.collectionVariables.get('order_id') && order.status === 'SIMULATED')).to.eql(true));",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Manual provider and PayPal sandbox",
+      "description": "Do not automate. Every POST is skipped until its documented one-shot manual_action is set. Capture additionally requires approval of that exact local order ID; the server checks PayPal approval independently. AI plan uses provider credits. Never enter merchant/API secrets in Postman.",
+      "item": [
+        {
+          "name": "Manual: establish session and inspect real modes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/config",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "config"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('Configuration responds successfully', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test('Modes are explicit', () => { pm.expect(data.mode).to.be.oneOf(['rehearsal','sandbox']); pm.expect(data.ai_mode).to.be.oneOf(['local','provider']); });",
+                  "pm.test('Merchant and model secrets are not returned', () => { ['paypal_client_secret','paypal_client_id','ai_api_key','access_token'].forEach(key => pm.expect(data).not.to.have.property(key)); });",
+                  "pm.collectionVariables.set('csrf_token', data.csrf_token || '');",
+                  "pm.collectionVariables.set('payment_mode', data.mode || '');",
+                  "pm.collectionVariables.set('ai_mode', data.ai_mode || '');",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Manual: read catalog",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/catalog",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "catalog"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('Catalog responds successfully', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test('Catalog is USD with integer-cent prices', () => { pm.expect(data.currency).to.eql('USD'); pm.expect(data.items).to.be.an('array').that.is.not.empty; data.items.forEach(item => { pm.expect(Number.isInteger(item.price_cents)).to.eql(true); pm.expect(item.price_cents).to.be.above(0); }); });",
+                  "const prices = {}; (data.items || []).forEach(item => { prices[item.id] = item.price_cents; });",
+                  "pm.collectionVariables.set('catalog_prices', JSON.stringify(prices));",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Manual: request one real AI plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Origin",
+                "value": "{{base_url}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/plans",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "plans"
+              ]
+            },
+            "description": "Set collection variable manual_action=generate_ai_plan immediately before Send. Uses one provider request.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"Build a calm home office for video calls under $300\",\n  \"budget_cents\": 30000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "const requestedAction = pm.collectionVariables.get('manual_action') || '';",
+                  "pm.collectionVariables.unset('manual_action');",
+                  "if (pm.collectionVariables.get('payment_mode') !== 'sandbox' || pm.collectionVariables.get('ai_mode') !== 'provider' || !pm.collectionVariables.get('csrf_token') || requestedAction !== \"generate_ai_plan\") { console.warn('Skipped: configure provider + sandbox and enter the documented one-shot manual_action for this exact request.'); pm.execution.skipRequest(); }",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('Plan responds successfully', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json();",
+                  "const prices = JSON.parse(pm.collectionVariables.get('catalog_prices') || '{}');",
+                  "pm.test('Plan prices and totals come from the catalog and respect $300', () => {",
+                  "  pm.expect(plan.items).to.be.an('array').that.is.not.empty;",
+                  "  pm.expect(plan.budget_cents).to.eql(30000);",
+                  "  let total = 0; const seen = new Set();",
+                  "  plan.items.forEach(item => { pm.expect(seen.has(item.product_id)).to.eql(false); seen.add(item.product_id); pm.expect(item.unit_price_cents).to.eql(prices[item.product_id]); pm.expect(Number.isInteger(item.quantity)).to.eql(true); pm.expect(item.quantity).to.be.within(1,5); pm.expect(item.line_total_cents).to.eql(prices[item.product_id] * item.quantity); total += item.line_total_cents; });",
+                  "  pm.expect(plan.total_cents).to.eql(total); pm.expect(total).to.be.at.most(30000); pm.expect(plan.remaining_cents).to.eql(30000-total);",
+                  "});",
+                  "pm.test('Planner source is correctly labeled', () => pm.expect(plan.ai_source).to.eql(pm.collectionVariables.get('ai_mode') === 'provider' ? 'provider' : 'local'));",
+                  "if (pm.response.code === 200 && plan.id) { pm.collectionVariables.set('plan_id', plan.id); pm.collectionVariables.set('cart_items', JSON.stringify(plan.items.map(item => ({product_id:item.product_id,quantity:item.quantity})))); pm.collectionVariables.set('plan_total', String(plan.total_cents)); }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Manual: create PayPal sandbox order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Origin",
+                "value": "{{base_url}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ]
+            },
+            "description": "Set manual_action=create_sandbox_order. Review the stored approval_url and approve using a sandbox buyer in a browser.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"plan_id\": \"{{plan_id}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "const requestedAction = pm.collectionVariables.get('manual_action') || '';",
+                  "pm.collectionVariables.unset('manual_action');",
+                  "if (pm.collectionVariables.get('payment_mode') !== 'sandbox' || pm.collectionVariables.get('ai_mode') !== 'provider' || !pm.collectionVariables.get('csrf_token') || requestedAction !== \"create_sandbox_order\") { console.warn('Skipped: configure provider + sandbox and enter the documented one-shot manual_action for this exact request.'); pm.execution.skipRequest(); }",
+                  "",
+                  "if (!pm.collectionVariables.get('plan_id')) { console.warn('Skipped: generate a valid plan first.'); pm.execution.skipRequest(); }",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('Sandbox order responds successfully', () => pm.response.to.have.status(200));",
+                  "const order = pm.response.json();",
+                  "pm.test('Sandbox order matches the reviewed total', () => { pm.expect(order.mode).to.eql('sandbox'); pm.expect(order.total_cents).to.eql(Number(pm.collectionVariables.get('plan_total'))); pm.expect(order.provider_order_id).to.be.a('string').that.is.not.empty; });",
+                  "if (pm.response.code === 200 && order.mode === 'sandbox') { pm.collectionVariables.set('order_id', order.id); pm.collectionVariables.set('order_mode', order.mode); pm.collectionVariables.set('approval_url', order.approval_url || ''); }",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Manual: capture buyer-approved sandbox order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Origin",
+                "value": "{{base_url}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/orders/{{order_id}}/capture",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                "{{order_id}}",
+                "capture"
+              ]
+            },
+            "description": "After approving the exact PayPal order, set manual_action=capture_approved_sandbox_order and buyer_approved_order_id to the local order_id. Each is consumed before sending. Pending is not completed.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "const requestedAction = pm.collectionVariables.get('manual_action') || '';",
+                  "pm.collectionVariables.unset('manual_action');",
+                  "if (pm.collectionVariables.get('payment_mode') !== 'sandbox' || pm.collectionVariables.get('ai_mode') !== 'provider' || !pm.collectionVariables.get('csrf_token') || requestedAction !== \"capture_approved_sandbox_order\") { console.warn('Skipped: configure provider + sandbox and enter the documented one-shot manual_action for this exact request.'); pm.execution.skipRequest(); }",
+                  "",
+                  "const approvedOrder = pm.collectionVariables.get('buyer_approved_order_id') || '';",
+                  "pm.collectionVariables.unset('buyer_approved_order_id');",
+                  "if (!pm.collectionVariables.get('order_id') || pm.collectionVariables.get('order_mode') !== 'sandbox' || approvedOrder !== pm.collectionVariables.get('order_id')) { console.warn('Skipped: approve this exact order on PayPal sandbox, then set buyer_approved_order_id to its local order ID.'); pm.execution.skipRequest(); }",
+                  "})();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('Capture request responds successfully', () => pm.response.to.have.status(200));",
+                  "const receipt = pm.response.json();",
+                  "pm.test('Sandbox payment is not confused with a simulation', () => { pm.expect(receipt.mode).to.eql('sandbox'); pm.expect(receipt.status).to.be.oneOf(['COMPLETED','PENDING']); pm.expect(receipt.total_cents).to.eql(Number(pm.collectionVariables.get('plan_total'))); if (receipt.status === 'COMPLETED') pm.expect(receipt.capture_id).to.be.a('string').that.is.not.empty; });",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "Manual: inspect resulting payment history",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(() => {",
+                  "pm.test('History responds successfully', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test('History is a session-owned list', () => { pm.expect(data.orders).to.be.an('array'); data.orders.forEach(order => { pm.expect(order.mode).to.be.oneOf(['sandbox','rehearsal']); pm.expect(order.currency).to.eql('USD'); if (order.status === 'SIMULATED') pm.expect(order.mode).to.eql('rehearsal'); }); });",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+!.env.hackathon.example
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+data/
+dist/
+preview/
+*.sqlite*
+.DS_Store
