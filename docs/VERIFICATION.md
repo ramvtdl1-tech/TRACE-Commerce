@@ -6,7 +6,7 @@ Verified 1 November 2026 using Python 3.11 on macOS. This is an integration reco
 
 - **Real end-to-end AI + PayPal sandbox checkout:** the user generated a Nebius plan, reviewed the cart, approved checkout as the sandbox buyer and completed capture. The stored receipt reports **$215.00 USD, COMPLETED**. A separate read-only PayPal Orders v2 request independently verified the order ID, cart reference, USD amount and completed capture ID against the stored receipt. No duplicate capture was attempted.
 - **Recorded AI identity:** Nebius Token Factory / `nvidia/Nemotron-3_5-Lightning`. The original plan's provider/model and budget are retained on the order receipt.
-- **35 automated backend/tooling tests:** `python -m unittest discover -s tests -v` passed. Controlled providers and isolated databases cover authoritative prices/budgets, session ownership, CSRF, quotas, malformed data, retries, pending captures, protected payment transitions, immutable AI provenance and tooling guards. Automated tests do not call real providers.
+- **38 automated backend/tooling tests:** `python -m unittest discover -s tests -v` passed. Controlled providers and isolated databases cover authoritative prices/budgets, session ownership, CSRF, quotas, malformed data, retries, pending captures, protected payment transitions, immutable AI provenance and tooling guards. Automated tests do not call real providers.
 - **Actual Postman Newman 6.2.2 execution:** 7 rehearsal requests, 18 assertions, zero failures. The collection checks session/cookies/CSRF, catalog, plan/revision totals, simulated receipt and history. Its manual sandbox operations require separate one-shot opt-ins.
 - **Python rehearsal smoke checker:** a $226.00 cart within $300.00 completed with a SIMULATED receipt. The checker refuses sandbox mutations and requires explicit opt-in for provider spending.
 - **Real AI checks:** separate provider and browser-to-provider requests produced valid five-product $215.00 and $220.00 plans within $300.00. Updated provider credentials were subsequently checked against the model catalog and a real $215.00 planning result.
@@ -14,6 +14,8 @@ Verified 1 November 2026 using Python 3.11 on macOS. This is an integration reco
 - **Source checks:** JavaScript syntax, Python compilation, dependency consistency, configuration and artifact preflight checks. Strict preflight distinguishes rehearsal from configured provider+sandbox; configuration alone does not prove payment success.
 - **Deployment preparation:** Compose configuration and CI YAML parse. Clean source extraction previously served assets/health and completed rehearsal. GitHub-hosted CI and a Docker image build have not been run here.
 - **Credential handling:** runtime keys are held in ignored private `.env` files; publishable example files contain placeholders. Source archives exclude credentials, SQLite/session records, virtual environments and caches.
+
+Hosting configuration additionally verifies automatic Render origin selection, explicit custom-domain precedence and HTTPS validation. The Blueprint prompts privately for required credentials and selects provider + sandbox modes; it uses the documented `0.5c-512mb` plan ID.
 
 ## Remaining external work
 

@@ -52,7 +52,7 @@ class Settings:
             ai_model=os.getenv("AI_MODEL") or os.getenv("NEBIUS_MODEL", ""),
             ai_max_tokens=int(os.getenv("AI_MAX_TOKENS", "4000")),
             ai_base_url=os.getenv("AI_BASE_URL") or os.getenv("NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1"),
-            public_base_url=os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/"),
+            public_base_url=(os.getenv("PUBLIC_BASE_URL") or os.getenv("RENDER_EXTERNAL_URL") or "http://localhost:8000").rstrip("/"),
             database_path=os.getenv("DATABASE_PATH", str(ROOT / "data" / "commerce.db")),
             cookie_secure=truth(os.getenv("COOKIE_SECURE", "false")),
             ai_session_limit=int(os.getenv("AI_SESSION_HOURLY_LIMIT", "20")),

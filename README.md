@@ -113,15 +113,31 @@ and secure cookie, and retain the volume. Run **one application instance with on
 worker**. Do not mount the SQLite file across multiple hosts. The container runs
 as a non-root user and includes a health check.
 
-**Render**: publish the clean standalone source, create a Blueprint from
-`render.yaml`, and enter your exact HTTPS service origin for `PUBLIC_BASE_URL`.
-The configuration uses a persistent disk and a compatible paid service; review
-Render's displayed cost before creating it. If keeping the parent repository,
-select `trace-commerce/render.yaml` as the Blueprint path and add
-`rootDir: trace-commerce` to the service. After the first rehearsal deployment,
-set `PAYMENT_MODE=sandbox`, `AI_MODE=provider`, and add the four secret/model
-variables in Render's environment settings. Redeploy and run the judge guide.
-Configuration alone is not a Render deployment or a sponsor-prize claim.
+**Render Blueprint deployment**:
+
+1. Open [Render Dashboard](https://dashboard.render.com/) and select **New → Blueprint**.
+2. Connect GitHub and select `ramvtdl1-tech/TRACE-Commerce`, branch `main`.
+   The Blueprint path is `render.yaml`; this repository's root directory is already correct.
+3. Name the Blueprint `trace-commerce`. It uses a single paid web service and a
+   1 GB persistent disk. Review the displayed cost before creating resources.
+4. Fill the four prompted environment variables from your private `.env`:
+   `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` from the working sandbox merchant
+   app, `AI_API_KEY`, and `AI_MODEL` (`nvidia/Nemotron-3_5-Lightning` was verified).
+   Do not upload the `.env` file or put these values in GitHub.
+5. Select **Deploy Blueprint**. Wait for the web service to become **Live**.
+   The Blueprint selects `PAYMENT_MODE=sandbox`, `AI_MODE=provider`,
+   `COOKIE_SECURE=true` and `/var/data/commerce.sqlite3` automatically.
+6. Open the generated HTTPS `onrender.com` URL and its `/healthz` endpoint.
+   The app automatically uses Render's `RENDER_EXTERNAL_URL` for approval/cancel
+   returns and origin checks. Leave `PUBLIC_BASE_URL` unset on Render unless
+   configuring a custom domain; for a custom domain set its exact HTTPS origin.
+7. Generate a fresh plan on the hosted app, approve checkout as the sandbox buyer,
+   return to the same hosted domain and complete capture. Confirm a `COMPLETED`
+   receipt. Localhost sessions and receipts are not copied to the hosted service.
+
+If using the parent repository instead of the standalone public repository,
+select `trace-commerce/render.yaml` and set `rootDir: trace-commerce` on the
+service. Configuration alone is not a verified deployment or sponsor-prize claim.
 
 Health endpoint: `/healthz`. SQLite must remain writable. A failed database check
 fails readiness. Use `/api/config` to confirm active modes without revealing keys.
